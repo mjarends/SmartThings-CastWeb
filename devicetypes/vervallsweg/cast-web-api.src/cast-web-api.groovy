@@ -13,7 +13,9 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  */
- preferences {
+import org.json.JSONObject
+
+preferences {
     input("configLoglevel", "enum", title: "Log level?",
         required: false, multiple:false, value: "nothing", options: ["0","1","2","3","4"])
     input("syncNamesFromAPI", "bool", title: "Don't sync cast-device names from API?", required: false)
@@ -103,12 +105,12 @@ def parse(String description) {
 }
 
 def installed() {
-    installDevices( parseListFromString( getDataValue("devices") ) )
+    installDevices( new JSONObject(getDataValue("devices")) )
     sendEvent(name: "updateStatus", value: "Click to check for updates", displayed: false)
 }
 
 def updated() {
-    installDevices( parseListFromString( getDataValue("devices") ) )
+    installDevices( new JSONObject(getDataValue("devices")) )
 }
 
 def refresh() {
@@ -124,46 +126,50 @@ def refreshAll() {
     getChildDevices().each{child -> child.refresh()}
 }
 
-def installDevices(ids) {
+def installDevices(devicesJson) {
     def devicesToCreate = []
     def children = getChildDevices()
-    logger('debug', "installDevices() children: " + children.size() + ", ids: " + ids)
+    logger('debug', "installDevices() children: " + children.size() + ", devices: " + devices)
     
-    ids.each { id ->
-        
+    // this is a JSONArray
+    def devicesList = devicesJson.devices
+    for (int i = 0; i < devicesList.length(); i++) {
+    	JSONObject device = devicesList.get(i)
+        logger('debug', "installDevices() device: " + device)
+
         def exists = false
-        
+        def id = device.id
+
         children.each { child ->
             if( id.equals( child.deviceNetworkId ) ) { //id has a nbsp added to the front
                 exists = true
             }
         }
-        
+
         if (exists) {
-            logger('debug', "installDevices() id: "+id+", exists!")
+            logger('debug', "installDevices() id: " + id + ", exists!")
         } else {
-            logger('warn', "installDevices() id: "+id+", doesn't exist")
-            devicesToCreate.add(id)
+            logger('warn', "installDevices() id: " + id + ", doesn't exist")
+            devicesToCreate.add(device)
             logger('debug', "installDevices() devicesToCreate: "+devicesToCreate)
         }
-    }
+	}
     
     createDevices(devicesToCreate)
 }
 
-def createDevices(ids) {
-    logger('debug', "createDevices() ids: " + ids)
+def createDevices(devices) {
+    logger('debug', "createDevices() devices: " + devices)
     
-    ids.each {
-        if(it!=null&&it!="") {
-            logger('debug', "createDevices() adding id: " + it)
-            addChildDevice("vervallsweg", "cast-web-device", it, location.hubs[0].id, [
-                label: "cast-web-device",
-                data: [
-                    "apiHost": getDataValue("apiHost")
-                ]
-            ])
-        }
+    devices.each { device ->
+        logger('debug', "createDevices() adding device: " + device)
+	
+        addChildDevice("vervallsweg", "cast-web-device", device.id, location.hubs[0].id, [
+            label: device.name,
+            data: [
+                "apiHost": getDataValue("apiHost")
+            ]
+        ])
     }
 }
 
@@ -204,8 +210,7 @@ def playTextAndRestore(message, level = 0, thirdValue = 0) {
 }
 
 def setApiHost(apiHost) {
-    log.warn "apiHost: "+apiHost
-    logger('info', 'setApiHost(), to: '+apiHost)
+    logger('debug', 'setApiHost(), to: '+apiHost)
     updateDataValue("apiHost", apiHost)
     
     def children = getChildDevices()
