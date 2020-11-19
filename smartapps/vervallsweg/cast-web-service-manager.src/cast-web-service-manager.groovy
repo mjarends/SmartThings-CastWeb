@@ -119,29 +119,36 @@ def addDevices(selectedDevices) {
         
     if(selectedDevices && selectedDevices!=null) {
         
-        if(getChildDevices().size()<1) {
+        if(getChildDevices().size() < 1) {
             logger('debug', "No cast-web-api installed" )
             
-            if(state.latestHttpMac) {
-                addChildDevice("vervallsweg", "cast-web-api", ""+state.latestHttpMac, location.hubs[0].id, [
-                    "label": "cast-web-api",
-                    "data": [
-                        "apiHost": apiHostAddress,
-                        "devices": "[]"
-                    ]
-                ])
-            } else {
-                addedDevices.put('Error', "The cast-web-api doesn't retun it's MAC address. No devices were added.")
-            }
+            addChildDevice("vervallsweg", "cast-web-api", "cast-web-api:"+apiHostAddress, location.hubs[0].id, [
+                "label": "cast-web-api",
+                "data": [
+                    "apiHost": apiHostAddress,
+                    "devices": "{}"
+                ]
+            ])
         }
         
-        selectedDevices.each { key ->
+	    def devicesDataValue = '{"devices":['
+        selectedDevices.eachWithIndex { key, index ->
             logger('debug', "Selected device id: " + key + ", name: " + state.devicesMap[key] )
             addedDevices.put(key, state.devicesMap[key])
+            
+            // Add the device
+            def deviceJson = ''
+            if(index > 0) {
+            	deviceJson = deviceJson + ','
+            }
+            deviceJson = """${deviceJson}{"id": "${key}", "name": "${state.devicesMap[key]}"}"""
+            devicesDataValue = """${devicesDataValue}${deviceJson}"""
         }
+        devicesDataValue = """${devicesDataValue}]}"""
         
         getChildDevices().each {
-            it.updateDataValue("devices", ""+selectedDevices);
+            //it.updateDataValue("devices", ""+selectedDevices)
+            it.updateDataValue("devices", ""+devicesDataValue)
             it.updated()
         }
     }
@@ -289,7 +296,7 @@ def parse(description) {
     state.latestHttpMac = mac
     if(status==200){
         def length = 0
-        logger('debug', "JSON rcvd: "+json+", JSON.size: "+json.size)
+        logger('debug', "Status: " + status + " MAC address: " + mac + " JSON rcvd: "+json+", JSON.size: "+json.size)
         
         def devices = [:]
         for(int i=0; i<json.size; i++) {
